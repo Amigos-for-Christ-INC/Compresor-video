@@ -4,7 +4,9 @@ Herramienta de Amigos for Christ para comprimir videos y extraer audio. Funciona
 
 ## Abrir la herramienta
 
-**[Abrir el compresor de video](https://amigos-for-christ-inc.github.io/Compresor-video/)**
+**[Abrir el compresor de video](https://amigos-for-christ-inc.github.io/Compresor-video/compresor-video/)**
+
+Enlace directo: https://amigos-for-christ-inc.github.io/Compresor-video/compresor-video/
 
 Funciona mejor en Chrome o Edge en una computadora. El enlace funciona cuando GitHub Pages está activado en el repositorio (Settings → Pages → Deploy from a branch → `main` / `(root)`).
 
