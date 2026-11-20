@@ -7,12 +7,15 @@ Herramientas que funcionan por completo en el navegador: los archivos no se sube
 | `compresor-video/` | Comprime varios videos en cola (por peso objetivo, calidad o bitrate), con recorte, encuadre, rotación, velocidad y ajustes de imagen y sonido. También extrae solo el audio en MP3, WAV, M4A u Opus. Usa la identidad visual de Amigos for Christ. |
 | `compresor-discord/` | Comprime un video para que quede por debajo del límite de Discord (20 MB por defecto). |
 
-## Cómo usarlas
+## Abrir las herramientas
 
-Abre el `index.html` de cada carpeta en Chrome o Edge en una computadora. Si el repositorio tiene GitHub Pages activado, quedan disponibles en:
+- **[Página de inicio](https://amigos-for-christ-inc.github.io/Compresor-video/)**
+- **[Compresor general](https://amigos-for-christ-inc.github.io/Compresor-video/compresor-video/)**
+- **[Compresor para Discord](https://amigos-for-christ-inc.github.io/Compresor-video/compresor-discord/)**
 
-- `https://<usuario-u-organización>.github.io/<repositorio>/compresor-video/`
-- `https://<usuario-u-organización>.github.io/<repositorio>/compresor-discord/`
+Funcionan mejor en Chrome o Edge en una computadora. Los enlaces funcionan cuando GitHub Pages está activado en el repositorio (Settings → Pages → Deploy from a branch → `main` / `(root)`).
+
+También puedes descargar el `index.html` de cualquier carpeta y abrirlo con doble clic.
 
 ## Cómo funcionan
 
