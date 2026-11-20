@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Compresor de video para Discord</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: una sola columna de herramienta; el medidor de tamaño con la línea del límite es la pieza central */
+:root{
+  --bg:#F1F4F6; --surface:#FFFFFF; --surface-2:#E8EDF1; --fg:#131A20; --muted:#56626F; --line:#D6DDE4;
+  --accent:#0E7268; --accent-hover:#0B5D55; --accent-fg:#FFFFFF; --accent-soft:#D3EEEA;
+  --limit:#B45309; --good:#15803D; --good-soft:#DCF3E3; --warn:#A35207; --warn-soft:#FBEBD5; --bad:#B42318; --bad-soft:#FBE1DE;
+  --orig:#A9B4BF;
+  --font-display:"Space Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1215; --surface:#161C21; --surface-2:#1F262D; --fg:#E6EBEF; --muted:#97A3AF; --line:#2A333C;
+    --accent:#34D3BE; --accent-hover:#5EE0CE; --accent-fg:#04201C; --accent-soft:#113833;
+    --limit:#F4B13E; --good:#4ADE80; --good-soft:#123222; --warn:#F4B13E; --warn-soft:#3A2A10; --bad:#F87171; --bad-soft:#3B1717;
+    --orig:#4A5560; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1215; --surface:#161C21; --surface-2:#1F262D; --fg:#E6EBEF; --muted:#97A3AF; --line:#2A333C;
+  --accent:#34D3BE; --accent-hover:#5EE0CE; --accent-fg:#04201C; --accent-soft:#113833;
+  --limit:#F4B13E; --good:#4ADE80; --good-soft:#123222; --warn:#F4B13E; --warn-soft:#3A2A10; --bad:#F87171; --bad-soft:#3B1717;
+  --orig:#4A5560; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1,h2{font-family:var(--font-display);text-wrap:balance;margin:0}
+h1{font-size:clamp(1.75rem,4.5vw,2.4rem);line-height:1.1;letter-spacing:-0.02em;font-weight:700}
+h2{font-size:1.05rem;font-weight:600;letter-spacing:-0.005em}
+p{margin:0}
+.top{display:flex;flex-direction:column;gap:10px;padding-block:8px 4px}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--accent);font-weight:600}
+.lede{color:var(--muted);max-width:60ch}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+
+/* Selector de archivo */
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;
+  border:1.5px dashed var(--line);border-radius:12px;padding:36px 16px;cursor:pointer;background:var(--surface-2);transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.drop input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.drop-icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--accent);margin-bottom:6px}
+.drop-title{font-family:var(--font-display);font-weight:600;font-size:1.1rem}
+.drop-sub{color:var(--muted);font-size:.88rem}
+
+.source{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:start}
+.source video{width:100%;max-width:100%;border-radius:10px;background:#000;aspect-ratio:16/9;object-fit:contain}
+.facts{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:.9rem}
+.facts dt{color:var(--muted)}
+.facts dd{margin:0;min-width:0;overflow-wrap:anywhere;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:.86rem}
+.facts dd.name{font-family:var(--font-body);font-weight:500;font-size:.9rem}
+.source-actions{grid-column:1/-1}
+
+/* Medidor */
+.gauge{display:grid;grid-template-columns:8.5rem minmax(0,1fr) 5.5rem;gap:12px 12px;align-items:center;padding-top:22px}
+.g-label{font-size:.85rem;color:var(--muted)}
+.g-track{position:relative;height:18px;background:var(--surface-2);border-radius:5px}
+.g-bar{position:absolute;inset:0 auto 0 0;border-radius:5px;transition:width .4s ease}
+.g-bar.orig{background:var(--orig)}
+.g-bar.out{background:var(--accent)}
+.g-bar.out.over{background:var(--bad)}
+.g-limit{position:absolute;top:-6px;bottom:-6px;width:0;border-left:2px dashed var(--limit)}
+.g-limit-tag{position:absolute;bottom:calc(100% + 4px);transform:translateX(-50%);white-space:nowrap;font-size:.72rem;font-weight:600;color:var(--limit);letter-spacing:.02em}
+.g-val{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:.88rem;text-align:right}
+.caption{font-size:.85rem;color:var(--muted)}
+.tag-example{display:inline-block;font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;font-weight:600;padding:2px 7px;border-radius:999px;background:var(--surface-2);color:var(--muted);margin-right:6px;vertical-align:1px}
+
+/* Ajustes */
+.fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field.wide{grid-column:span 3}
+.field label,.field .lbl{font-size:.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+input[type=number],input[type=text],select{font:inherit;font-size:.95rem;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.limit-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.limit-row .inp{position:relative;width:8.5rem}
+.limit-row .inp input{padding-right:36px}
+.limit-row .inp span{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.85rem;pointer-events:none}
+.chip{font:inherit;font-size:.85rem;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;font-family:var(--font-mono)}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--fg)}
+.trim{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.help{font-size:.82rem;color:var(--muted)}
+
+.plan{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;padding:12px 14px;border-radius:10px;background:var(--surface-2);font-size:.88rem}
+.plan b{font-weight:500;color:var(--muted);margin-right:6px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;padding:3px 10px;border-radius:999px}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.good{color:var(--good);background:var(--good-soft)}
+.pill.warn{color:var(--warn);background:var(--warn-soft)}
+.pill.bad{color:var(--bad);background:var(--bad-soft)}
+
+.banner{padding:11px 14px;border-radius:10px;font-size:.9rem;border:1px solid transparent}
+.banner.warn{background:var(--warn-soft);color:var(--fg);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+.banner.bad{background:var(--bad-soft);color:var(--fg);border-color:color-mix(in srgb,var(--bad) 35%,transparent)}
+.banner.good{background:var(--good-soft);color:var(--fg);border-color:color-mix(in srgb,var(--good) 35%,transparent)}
+
+.actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+button{font:inherit;cursor:pointer}
+.primary{background:var(--accent);color:var(--accent-fg);border:0;border-radius:10px;padding:12px 22px;font-weight:600;font-size:1rem;font-family:var(--font-display);letter-spacing:.01em}
+.primary:hover:not(:disabled){background:var(--accent-hover)}
+.primary:disabled{opacity:.45;cursor:not-allowed}
+.secondary{background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:11px 18px;font-weight:500}
+.secondary:hover{border-color:var(--accent)}
+.link{background:none;border:0;color:var(--accent);padding:0;font-weight:500;text-decoration:underline;text-underline-offset:3px}
+
+/* Progreso */
+.bar{height:10px;background:var(--surface-2);border-radius:999px;overflow:hidden}
+.bar > div{height:100%;width:0;background:var(--accent);border-radius:999px;transition:width .3s linear}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat{display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat span{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.stat strong{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:500;font-size:1.05rem}
+
+/* Resultado */
+.result{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:start}
+.result video{width:100%;max-width:100%;border-radius:10px;background:#000;aspect-ratio:16/9;object-fit:contain}
+.result-side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.big{font-family:var(--font-display);font-size:2.2rem;font-weight:700;letter-spacing:-0.02em;line-height:1}
+.big small{font-size:1rem;color:var(--muted);font-weight:500;margin-left:4px}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:.9rem;max-width:calc(100% - 32px);z-index:20}
+.hidden-video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+
+@media (max-width:640px){
+  .source,.result{grid-template-columns:1fr}
+  .fields{grid-template-columns:1fr 1fr}
+  .field.wide{grid-column:span 2}
+  .gauge{grid-template-columns:5.6rem minmax(0,1fr) 4.6rem;gap:12px 8px}
+  .stats{grid-template-columns:1fr 1fr}
+  .panel{padding:16px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <p class="eyebrow">Se procesa en tu navegador · el video no se sube a ningún sitio</p>
+    <h1>Compresor de video para Discord</h1>
+    <p class="lede">Elige un video, confirma el límite de tu cuenta y la herramienta calcula el bitrate exacto para que el archivo final quede por debajo.</p>
+  </header>
+
+  <div id="unsupported" class="banner bad" hidden>Este navegador no puede grabar video desde una página. Ábrela en Chrome o Edge en una computadora.</div>
+
+  <section class="panel" aria-labelledby="h-video">
+    <div class="panel-head"><h2 id="h-video">Video</h2></div>
+    <label class="drop" id="drop" for="fileInput">
+      <input type="file" id="fileInput" accept="video/*">
+      <span class="drop-icon" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+      </span>
+      <span class="drop-title">Arrastra un video aquí</span>
+      <span class="drop-sub">o haz clic para elegirlo · MP4, MOV, WEBM, MKV</span>
+    </label>
+    <div class="source" id="source" hidden>
+      <video id="preview" controls muted playsinline preload="metadata"></video>
+      <dl class="facts">
+        <dt>Archivo</dt><dd class="name" id="fName"></dd>
+        <dt>Peso</dt><dd id="fSize"></dd>
+        <dt>Duración</dt><dd id="fDur"></dd>
+        <dt>Resolución</dt><dd id="fRes"></dd>
+        <dt>Bitrate</dt><dd id="fRate"></dd>
+      </dl>
+      <div class="source-actions"><button class="link" id="changeBtn" type="button">Elegir otro video</button></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-size">
+    <div class="panel-head"><h2 id="h-size">Peso del archivo</h2><span class="help" id="sizeNote"></span></div>
+    <div class="gauge" id="gauge"></div>
+    <p class="caption" id="gaugeCaption"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-settings">
+    <h2 id="h-settings">Ajustes</h2>
+    <div class="fields">
+      <div class="field wide">
+        <span class="lbl" id="lbl-limit">Límite de tu cuenta</span>
+        <div class="limit-row" role="group" aria-labelledby="lbl-limit">
+          <div class="inp"><input type="number" id="limitInput" min="1" max="2000" step="1" value="20" aria-label="Límite en MB"><span>MB</span></div>
+          <button class="chip" type="button" data-limit="10" aria-pressed="false">10</button>
+          <button class="chip" type="button" data-limit="20" aria-pressed="true">20</button>
+          <button class="chip" type="button" data-limit="50" aria-pressed="false">50</button>
+          <button class="chip" type="button" data-limit="100" aria-pressed="false">100</button>
+          <button class="chip" type="button" data-limit="500" aria-pressed="false">500</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="resSel">Resolución</label>
+        <select id="resSel">
+          <option value="auto" selected>Automática</option>
+          <option value="1080">1080p</option>
+          <option value="720">720p</option>
+          <option value="480">480p</option>
+          <option value="360">360p</option>
+          <option value="orig">Original</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="fpsSel">Cuadros por segundo</label>
+        <select id="fpsSel">
+          <option value="24">24 fps</option>
+          <option value="30" selected>30 fps</option>
+          <option value="60">60 fps</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="audioSel">Audio</label>
+        <select id="audioSel">
+          <option value="128" selected>128 kbps</option>
+          <option value="64">64 kbps</option>
+          <option value="0">Sin audio</option>
+        </select>
+      </div>
+      <div class="field wide">
+        <span class="lbl">Recortar (opcional)</span>
+        <div class="trim">
+          <div class="field"><label for="startInput" class="help" style="text-transform:none;letter-spacing:0;font-weight:500">Desde (m:ss)</label><input type="text" id="startInput" value="0:00" inputmode="decimal" autocomplete="off"></div>
+          <div class="field"><label for="endInput" class="help" style="text-transform:none;letter-spacing:0;font-weight:500">Hasta (m:ss)</label><input type="text" id="endInput" value="" placeholder="final" inputmode="decimal" autocomplete="off"></div>
+        </div>
+        <p class="help">Un fragmento más corto deja más bitrate para cada segundo, así que se ve mejor.</p>
+      </div>
+    </div>
+
+    <div class="plan" id="plan">
+      <span><b>Salida</b><span class="num" id="pRes">—</span></span>
+      <span><b>Video</b><span class="num" id="pVbr">—</span></span>
+      <span><b>Formato</b><span class="num" id="pFmt">—</span></span>
+      <span id="pQual"></span>
+    </div>
+    <div class="banner warn" id="planWarn" hidden></div>
+    <div class="banner good" id="planOk" hidden></div>
+
+    <div class="actions">
+      <button class="primary" id="goBtn" type="button" disabled>Comprimir video</button>
+      <span class="help" id="goHint">Primero elige un video.</span>
+    </div>
+  </section>
+
+  <section class="panel" id="progressPanel" hidden aria-live="polite">
+    <div class="panel-head"><h2>Comprimiendo…</h2><span class="help num" id="pctText">0%</span></div>
+    <div class="bar"><div id="barFill"></div></div>
+    <div class="stats">
+      <div class="stat"><span>Procesado</span><strong id="sDone">0:00</strong></div>
+      <div class="stat"><span>Restante aprox.</span><strong id="sEta">—</strong></div>
+      <div class="stat"><span>Peso actual</span><strong id="sSize">0.0 MB</strong></div>
+      <div class="stat"><span>Tiempo</span><strong id="sElapsed">0:00</strong></div>
+    </div>
+    <div class="banner warn" id="hiddenWarn" hidden>Pausado porque la pestaña quedó oculta. Continúa en cuanto vuelvas a esta pestaña.</div>
+    <p class="help">El video se reproduce en silencio por dentro para volver a codificarlo, así que tarda más o menos lo que dura. Deja esta pestaña abierta y a la vista.</p>
+    <div class="actions"><button class="secondary" id="cancelBtn" type="button">Cancelar</button></div>
+  </section>
+
+  <section class="panel" id="resultPanel" hidden aria-live="polite">
+    <div class="panel-head"><h2>Resultado</h2><span id="rPill"></span></div>
+    <div class="result">
+      <video id="outVideo" controls playsinline></video>
+      <div class="result-side">
+        <div class="big num" id="rSize">0<small>MB</small></div>
+        <p class="help" id="rDetail"></p>
+        <div class="banner bad" id="rOver" hidden></div>
+        <div class="actions">
+          <button class="primary" id="saveBtn" type="button">Guardar video</button>
+          <button class="secondary" id="smallerBtn" type="button">Hacerlo más pequeño</button>
+        </div>
+        <p class="help" id="saveNote"></p>
+      </div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const MB = 1e6;            // Discord cuenta en MB decimales
+  const SAFETY = 0.90;       // margen para contenedor y variaciones del codificador
+
+  const state = {
+    file:null, url:null, dur:0, w:0, h:0,
+    start:0, end:0, limit:20, res:'auto', fps:30, audio:128,
+    factor:1, busy:false, outBlob:null, outUrl:null, outExt:'mp4'
+  };
+
+  // ---------- formato ----------
+  const fmtMB = b => (b/MB >= 100 ? (b/MB).toFixed(0) : (b/MB).toFixed(1)) + ' MB';
+  const fmtTime = s => { if(!isFinite(s)||s<0) s=0; s=Math.round(s); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h? h+':'+String(m).padStart(2,'0') : m)+':'+String(x).padStart(2,'0'); };
+  const fmtRate = bps => bps >= 1e6 ? (bps/1e6).toFixed(2)+' Mbps' : Math.round(bps/1e3)+' kbps';
+  const parseTime = str => {
+    str = String(str||'').trim().replace(',', '.'); if(!str) return null;
+    const parts = str.split(':').map(Number); if(parts.some(n=>isNaN(n)||n<0)) return NaN;
+    return parts.reduce((acc,n)=>acc*60+n,0);
+  };
+
+  // ---------- soporte ----------
+  const MIME_CANDIDATES = [
+    ['video/mp4;codecs=avc1.640028,mp4a.40.2','mp4','MP4 (H.264)'],
+    ['video/mp4;codecs=avc1,mp4a.40.2','mp4','MP4 (H.264)'],
+    ['video/mp4','mp4','MP4'],
+    ['video/webm;codecs=vp9,opus','webm','WEBM (VP9)'],
+    ['video/webm;codecs=vp8,opus','webm','WEBM (VP8)'],
+    ['video/webm','webm','WEBM']
+  ];
+  function pickMime(withAudio){
+    if(!window.MediaRecorder) return null;
+    for(const [m,ext,label] of MIME_CANDIDATES){
+      const mm = withAudio ? m : m.replace(/,(mp4a\.40\.2|opus)/,'');
+      try{ if(MediaRecorder.isTypeSupported(mm)) return {mime:mm,ext,label}; }catch(e){}
+    }
+    return null;
+  }
+  const supported = !!(window.MediaRecorder && HTMLCanvasElement.prototype.captureStream);
+  if(!supported) $('unsupported').hidden = false;
+
+  // ---------- downloads ----------
+  let downloads = null;
+  const dlReady = (window.claude && typeof window.claude.use === 'function')
+    ? window.claude.use('downloads').then(d => (downloads = d)).catch(() => null)
+    : Promise.resolve(null);
+
+  // ---------- toast ----------
+  let toastTimer;
+  function toast(msg){ const t=$('toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.hidden=true,3500); }
+
+  // ---------- plan ----------
+  function plan(){
+    const dur = Math.max(0.5, state.end - state.start);
+    const audioBps = state.audio * 1000;
+    const targetBytes = state.limit * MB * SAFETY * state.factor;
+    let videoBps = targetBytes*8/dur - audioBps;
+    const origBps = state.file ? state.file.size*8/state.dur : 0;
+    let capped = false;
+    if(origBps && videoBps > origBps*0.85){ videoBps = origBps*0.85; capped = true; }
+    videoBps = Math.min(videoBps, 16e6);
+
+    let targetH;
+    if(state.res === 'orig') targetH = state.h;
+    else if(state.res === 'auto'){
+      const fpsAdj = state.fps/30;
+      targetH = videoBps >= 4e6*fpsAdj ? 1080 : videoBps >= 1.8e6*fpsAdj ? 720 : videoBps >= 0.8e6*fpsAdj ? 480 : 360;
+    } else targetH = +state.res;
+    const srcShort = Math.min(state.w||1920, state.h||1080);
+    const portrait = state.h > state.w;
+    // la resolución se aplica al lado corto (vale para videos verticales)
+    const shortSide = Math.min(targetH, srcShort);
+    const scale = shortSide / srcShort;
+    const W = Math.max(2, Math.round((state.w||1920)*scale/2)*2);
+    const H = Math.max(2, Math.round((state.h||1080)*scale/2)*2);
+    const bpp = videoBps / (W*H*state.fps);
+    const quality = bpp >= 0.075 ? 'good' : bpp >= 0.035 ? 'warn' : 'bad';
+    const estBytes = Math.max(0,(Math.max(videoBps,0) + audioBps) * dur / 8);
+    return {dur, audioBps, videoBps, W, H, bpp, quality, estBytes, capped, portrait, origBps};
+  }
+
+  // ---------- medidor ----------
+  function renderGauge(orig, est, limitBytes, opts={}){
+    const max = Math.max(orig, est, limitBytes) * 1.12;
+    const pct = x => Math.max(0, Math.min(100, x/max*100)).toFixed(2) + '%';
+    const lp = pct(limitBytes);
+    const over = est > limitBytes;
+    $('gauge').innerHTML =
+      `<span class="g-label">Original</span>
+       <div class="g-track"><div class="g-bar orig" style="width:${pct(orig)}"></div>
+         <div class="g-limit" style="left:${lp}"><span class="g-limit-tag">Límite ${state.limit} MB</span></div></div>
+       <span class="g-val">${fmtMB(orig)}</span>
+       <span class="g-label">${opts.final ? 'Comprimido' : 'Estimado'}</span>
+       <div class="g-track"><div class="g-bar out ${over?'over':''}" style="width:${pct(est)}"></div>
+         <div class="g-limit" style="left:${lp}"></div></div>
+       <span class="g-val">${opts.final ? '' : '≈ '}${fmtMB(est)}</span>`;
+  }
+
+  function showExample(){
+    state.limit = +$('limitInput').value || 20;
+    renderGauge(182*MB, 17.9*MB, state.limit*MB);
+    $('gaugeCaption').innerHTML = '<span class="tag-example">Ejemplo</span>Un video de 3:05 que pesa 182 MB quedaría en unos 18 MB a 360p. Elige tu video para ver sus números.';
+    $('sizeNote').textContent = '';
+  }
+
+  function update(){
+    syncChips();
+    if(!state.file){ showExample(); updatePlanEmpty(); return; }
+    const p = plan();
+    const fmt = pickMime(state.audio>0);
+    renderGauge(state.file.size, p.estBytes, state.limit*MB, {final:false});
+    const trimmed = state.start>0.05 || state.end < state.dur-0.05;
+    $('gaugeCaption').textContent = trimmed
+      ? `Fragmento de ${fmtTime(p.dur)} (de ${fmtTime(state.start)} a ${fmtTime(state.end)}). El estimado deja un margen del 10 % bajo el límite.`
+      : `El estimado deja un margen del 10 % bajo el límite para que no te quedes justo en el borde.`;
+    $('pRes').textContent = `${p.W}×${p.H}`;
+    $('pVbr').textContent = p.videoBps > 0 ? fmtRate(p.videoBps) : '—';
+    $('pFmt').textContent = fmt ? fmt.label : 'No disponible';
+    const qLabel = {good:'Calidad buena', warn:'Calidad aceptable', bad:'Calidad baja'}[p.quality];
+    $('pQual').innerHTML = p.videoBps > 0 ? `<span class="pill ${p.quality}">${qLabel}</span>` : '';
+
+    const warn = $('planWarn'), ok = $('planOk');
+    warn.hidden = true; ok.hidden = true;
+    let canGo = supported && !!fmt && !state.busy;
+    if(!(state.end > state.start + 0.4)){ warn.textContent = 'El final del recorte tiene que ir después del inicio.'; warn.hidden=false; canGo=false; }
+    else if(p.videoBps < 120e3){
+      warn.textContent = `Con ${fmtTime(p.dur)} de video no alcanza el espacio: quedaría a menos de 120 kbps. Recorta el video, quita el audio o sube el límite.`;
+      warn.hidden = false; canGo = false;
+    } else if(p.quality === 'bad'){
+      warn.textContent = 'Va a caber, pero se verá borroso. Prueba una resolución más baja, 24 fps o recortar el video.';
+      warn.hidden = false;
+    }
+    if(state.file.size <= state.limit*MB && !trimmed){
+      ok.textContent = `Este video ya pesa ${fmtMB(state.file.size)}, menos que tu límite. Puedes mandarlo tal cual a Discord.`;
+      ok.hidden = false;
+    }
+    $('goBtn').disabled = !canGo;
+    $('goHint').textContent = canGo ? `Tardará unos ${fmtTime(p.dur)}.` : (state.busy ? 'Compresión en curso.' : '');
+    $('sizeNote').textContent = '';
+  }
+  function updatePlanEmpty(){
+    ['pRes','pVbr','pFmt'].forEach(id=>$(id).textContent='—');
+    $('pQual').innerHTML=''; $('planWarn').hidden=true; $('planOk').hidden=true;
+    $('goBtn').disabled = true; $('goHint').textContent = supported ? 'Primero elige un video.' : '';
+  }
+  function syncChips(){
+    document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', String(+c.dataset.limit === state.limit)));
+  }
+
+  // ---------- cargar archivo ----------
+  function loadFile(file){
+    if(!file) return;
+    if(state.busy){ toast('Espera a que termine la compresión actual.'); return; }
+    if(!/^video\//.test(file.type) && !/\.(mp4|mov|m4v|webm|mkv|avi|3gp)$/i.test(file.name)){ toast('Ese archivo no parece un video.'); return; }
+    if(state.url) URL.revokeObjectURL(state.url);
+    clearResult();
+    state.file = file; state.url = URL.createObjectURL(file); state.factor = 1;
+    const v = $('preview');
+    v.src = state.url;
+    v.onloadedmetadata = async () => {
+      let d = v.duration;
+      if(!isFinite(d)){ // algunos WEBM no traen duración
+        d = await new Promise(res => {
+          const done = () => { v.removeEventListener('durationchange', check); res(v.duration); v.currentTime = 0; };
+          const check = () => { if(isFinite(v.duration)) done(); };
+          v.addEventListener('durationchange', check);
+          v.currentTime = 1e9;
+          setTimeout(()=>{ if(!isFinite(v.duration)) res(0); }, 4000);
+        });
+      }
+      if(!d || !v.videoWidth){ toast('El navegador no pudo leer este video. Prueba con un MP4.'); return; }
+      state.dur = d; state.w = v.videoWidth; state.h = v.videoHeight;
+      state.start = 0; state.end = d;
+      $('startInput').value = '0:00'; $('endInput').value = fmtTime(d);
+      $('fName').textContent = file.name;
+      $('fSize').textContent = fmtMB(file.size);
+      $('fDur').textContent = fmtTime(d);
+      $('fRes').textContent = `${state.w}×${state.h}`;
+      $('fRate').textContent = fmtRate(file.size*8/d);
+      $('drop').hidden = true; $('source').hidden = false;
+      update();
+    };
+    v.onerror = () => toast('El navegador no puede abrir este formato. Prueba con un MP4 o WEBM.');
+  }
+
+  $('fileInput').addEventListener('change', e => { loadFile(e.target.files[0]); e.target.value=''; });
+  const drop = $('drop');
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => loadFile(e.dataTransfer.files[0]));
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', e => { e.preventDefault(); if(e.target.closest && !e.target.closest('#drop') && e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+  $('changeBtn').addEventListener('click', () => $('fileInput').click());
+
+  // ---------- ajustes ----------
+  $('limitInput').addEventListener('input', e => { const n=+e.target.value; if(n>0){ state.limit=n; state.factor=1; update(); } });
+  document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => { state.limit=+c.dataset.limit; $('limitInput').value=state.limit; state.factor=1; update(); }));
+  $('resSel').addEventListener('change', e => { state.res=e.target.value; update(); });
+  $('fpsSel').addEventListener('change', e => { state.fps=+e.target.value; update(); });
+  $('audioSel').addEventListener('change', e => { state.audio=+e.target.value; state.factor=1; update(); });
+  function readTrim(){
+    if(!state.file) return;
+    const s = parseTime($('startInput').value), e = parseTime($('endInput').value);
+    state.start = (s===null||isNaN(s)) ? 0 : Math.min(Math.max(0,s), state.dur);
+    state.end = (e===null||isNaN(e)) ? state.dur : Math.min(Math.max(0,e), state.dur);
+    state.factor = 1; update();
+  }
+  $('startInput').addEventListener('change', readTrim);
+  $('endInput').addEventListener('change', readTrim);
+
+  // ---------- compresión ----------
+  let job = null;
+
+  $('goBtn').addEventListener('click', () => startJob());
+  $('cancelBtn').addEventListener('click', () => { if(job) job.cancel(); });
+  $('smallerBtn').addEventListener('click', () => {
+    if(state.busy || !state.file) return;
+    const lim = state.limit*MB*SAFETY;
+    const ratio = state.outBlob ? Math.min(0.85, (lim / state.outBlob.size) * 0.95) : 0.8;
+    state.factor *= ratio;
+    update();
+    startJob();
+  });
+
+  function startJob(){
+    if(state.busy || !state.file) return;
+    const p = plan();
+    if(p.videoBps < 120e3) return;
+    const fmt = pickMime(state.audio>0);
+    if(!fmt){ toast('Este navegador no puede crear el video. Usa Chrome o Edge.'); return; }
+
+    // Partes que deben ocurrir dentro del clic
+    let actx = null;
+    if(state.audio>0){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ actx=null; } }
+
+    state.busy = true; clearResult();
+    $('progressPanel').hidden = false; $('resultPanel').hidden = true;
+    $('goBtn').disabled = true; $('goHint').textContent = 'Compresión en curso.';
+    $('progressPanel').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto':'smooth', block:'start'});
+    run(p, fmt, actx).catch(err => {
+      console.error(err);
+      toast('No se pudo comprimir: ' + (err && err.message ? err.message : 'error desconocido'));
+      finishUI();
+    });
+  }
+
+  async function run(p, fmt, actx){
+    const v = document.createElement('video');
+    v.className = 'hidden-video'; v.playsInline = true; v.preload = 'auto'; v.muted = false; v.volume = 1;
+    v.src = state.url;
+    document.body.appendChild(v);
+    await new Promise((res, rej) => { if(v.readyState >= 1) res(); else { v.onloadedmetadata = res; v.onerror = () => rej(new Error('no se pudo leer el video')); } });
+    v.currentTime = state.start;
+    await new Promise(res => { v.onseeked = res; setTimeout(res, 3000); });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = p.W; canvas.height = p.H;
+    const ctx = canvas.getContext('2d', {alpha:false});
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(v, 0, 0, p.W, p.H);
+    const stream = canvas.captureStream(state.fps);
+
+    let audioNote = '';
+    if(state.audio>0){
+      if(actx){
+        try{
+          const src = actx.createMediaElementSource(v);
+          const dest = actx.createMediaStreamDestination();
+          src.connect(dest);           // no se conecta a los parlantes: se graba en silencio
+          dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+          await actx.resume().catch(()=>{});
+        }catch(e){ audioNote = 'No se pudo capturar el audio.'; }
+      }
+    }
+
+    const recOpts = { mimeType: fmt.mime, videoBitsPerSecond: Math.round(p.videoBps) };
+    if(state.audio>0) recOpts.audioBitsPerSecond = p.audioBps;
+    const rec = new MediaRecorder(stream, recOpts);
+    const chunks = []; let bytes = 0;
+    rec.ondataavailable = e => { if(e.data && e.data.size){ chunks.push(e.data); bytes += e.data.size; } };
+    const stopped = new Promise(res => rec.onstop = res);
+
+    let wake = null;
+    try{ if(navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); }catch(e){}
+
+    let finished = false, cancelled = false, pausedHidden = false;
+    let frameHandle = null;
+    const useRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+    const t0 = performance.now(); let pausedMs = 0, pauseStart = 0;
+    const span = state.end - state.start;
+
+    const progress = t => {
+      const frac = Math.max(0, Math.min(1, (t - state.start)/span));
+      const elapsed = (performance.now() - t0 - pausedMs)/1000;
+      $('barFill').style.width = (frac*100).toFixed(1)+'%';
+      $('pctText').textContent = Math.floor(frac*100)+'%';
+      $('sDone').textContent = fmtTime(t - state.start) + ' / ' + fmtTime(span);
+      $('sEta').textContent = frac > 0.02 ? fmtTime(elapsed/frac - elapsed) : '—';
+      $('sSize').textContent = fmtMB(bytes);
+      $('sElapsed').textContent = fmtTime(elapsed);
+    };
+
+    const schedule = () => {
+      if(finished) return;
+      if(useRVFC){ if(frameHandle!==null) v.cancelVideoFrameCallback(frameHandle); frameHandle = v.requestVideoFrameCallback(onFrame); }
+      else { if(frameHandle!==null) cancelAnimationFrame(frameHandle); frameHandle = requestAnimationFrame(() => onFrame(0, null)); }
+    };
+    const onFrame = (now, meta) => {
+      frameHandle = null;
+      if(finished) return;
+      ctx.drawImage(v, 0, 0, p.W, p.H);
+      const t = meta ? meta.mediaTime : v.currentTime;
+      progress(t);
+      if(t >= state.end - 0.02){ finish(); return; }
+      schedule();
+    };
+
+    const onVis = () => {
+      if(finished) return;
+      if(document.hidden && !pausedHidden){
+        pausedHidden = true; pauseStart = performance.now();
+        v.pause(); if(rec.state === 'recording') rec.pause();
+        $('hiddenWarn').hidden = false;
+      } else if(!document.hidden && pausedHidden){
+        pausedHidden = false; pausedMs += performance.now() - pauseStart;
+        $('hiddenWarn').hidden = true;
+        if(rec.state === 'paused') rec.resume();
+        v.play().catch(()=>{}); schedule();
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    v.addEventListener('ended', () => finish());
+    v.addEventListener('timeupdate', () => { if(v.currentTime >= state.end - 0.02) finish(); });
+
+    function finish(){
+      if(finished) return; finished = true;
+      if(frameHandle!==null){ try{ useRVFC ? v.cancelVideoFrameCallback(frameHandle) : cancelAnimationFrame(frameHandle); }catch(e){} }
+      v.pause();
+      if(rec.state !== 'inactive') rec.stop();
+    }
+    job = { cancel(){ cancelled = true; finish(); } };
+
+    rec.start(1000);
+    try{
+      await v.play();
+    }catch(e){
+      // El navegador bloqueó la reproducción con sonido: seguimos sin audio
+      v.muted = true;
+      audioNote = 'El navegador no dejó capturar el audio, así que el video salió sin sonido.';
+      await v.play();
+    }
+    schedule();
+
+    await stopped;
+    document.removeEventListener('visibilitychange', onVis);
+    stream.getTracks().forEach(t => t.stop());
+    if(actx) actx.close().catch(()=>{});
+    if(wake) wake.release().catch(()=>{});
+    v.removeAttribute('src'); v.load(); v.remove();
+    job = null;
+
+    if(cancelled){ finishUI(); toast('Compresión cancelada.'); return; }
+    const blob = new Blob(chunks, {type: fmt.mime.split(';')[0]});
+    showResult(blob, fmt, p, audioNote);
+    finishUI();
+  }
+
+  function finishUI(){
+    state.busy = false;
+    $('progressPanel').hidden = true; $('hiddenWarn').hidden = true;
+    $('barFill').style.width = '0';
+    update();
+  }
+
+  function clearResult(){
+    if(state.outUrl) URL.revokeObjectURL(state.outUrl);
+    state.outBlob = null; state.outUrl = null;
+    $('resultPanel').hidden = true; $('outVideo').removeAttribute('src');
+  }
+
+  function showResult(blob, fmt, p, audioNote){
+    state.outBlob = blob; state.outExt = fmt.ext;
+    state.outUrl = URL.createObjectURL(blob);
+    $('outVideo').src = state.outUrl;
+    const limitBytes = state.limit*MB;
+    const fits = blob.size <= limitBytes;
+    $('rSize').innerHTML = `${(blob.size/MB).toFixed(1)}<small>MB</small>`;
+    $('rPill').innerHTML = fits
+      ? `<span class="pill good">Cabe en ${state.limit} MB</span>`
+      : `<span class="pill bad">Pasa el límite</span>`;
+    const saved = Math.max(0, 1 - blob.size/state.file.size);
+    $('rDetail').textContent = `${p.W}×${p.H} · ${state.fps} fps · ${fmt.label}` +
+      (state.audio>0 ? ` · audio ${state.audio} kbps` : ' · sin audio') +
+      ` · ${Math.round(saved*100)} % más liviano que el original.` + (audioNote ? ' ' + audioNote : '');
+    const over = $('rOver');
+    if(!fits){
+      over.textContent = `Quedó ${fmtMB(blob.size - limitBytes)} por encima del límite. Toca «Hacerlo más pequeño» y se vuelve a comprimir con menos bitrate.`;
+      over.hidden = false;
+    } else over.hidden = true;
+    renderGauge(state.file.size, blob.size, limitBytes, {final:true});
+    $('gaugeCaption').textContent = fits
+      ? `Listo: ${fmtMB(blob.size)} de un límite de ${state.limit} MB.`
+      : `El codificador se pasó del objetivo. Vuelve a intentarlo con menos bitrate.`;
+    $('resultPanel').hidden = false;
+    dlReady.then(() => {
+      $('saveNote').textContent = '';
+      $('saveBtn').disabled = false;
+    });
+    $('resultPanel').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto':'smooth', block:'start'});
+  }
+
+
+  function anchorSave(filename, blob){
+    const a = document.createElement('a'), u = URL.createObjectURL(blob);
+    a.href = u; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 60000);
+  }
+  $('saveBtn').addEventListener('click', async () => {
+    if(!state.outBlob) return;
+    await dlReady;
+    const base = state.file.name.replace(/\.[^.]+$/, '').replace(/[^\p{L}\p{N} _\-]+/gu, '').trim() || 'video';
+    if(!downloads){ anchorSave(`${base}-discord.${state.outExt}`, state.outBlob); toast('Video descargado.'); return; }
+    try{
+      await downloads.save({ filename: `${base}-discord.${state.outExt}`, data: state.outBlob });
+      toast('Video guardado.');
+    }catch(e){
+      const code = e && e.code;
+      if(code === 'declined') toast('Descarga cancelada.');
+      else if(code === 'rate_limited') toast('Ya hay una descarga pendiente. Inténtalo en un momento.');
+      else if(code === 'too_large') toast('El archivo es demasiado grande para guardarlo aquí.');
+      else toast('No se pudo guardar el video en esta vista.');
+    }
+  });
+
+  update();
+})();
+</script>
+</body>
+</html>
